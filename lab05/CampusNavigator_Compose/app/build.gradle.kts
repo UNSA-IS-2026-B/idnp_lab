@@ -55,4 +55,6 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.8.0")
     // Iconos extendidos de Material 3
     implementation("androidx.compose.material:material-icons-extended")
+    // ViewModel para Compose
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.0")
 }

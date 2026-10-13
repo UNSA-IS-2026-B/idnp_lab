@@ -14,6 +14,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
@@ -22,44 +23,57 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.example.campusnavigator_compose.ui.theme.CampusNavigator_ComposeTheme
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
-// Paso 1: Definición de la Sealed Class para las pantallas
+// 5: Se agrega la cuarta pantalla "Perfil" a la Sealed Class
 sealed class Screen(val route: String, val label: String) {
     object Home : Screen("home", "Home")
     object Edificios : Screen("edificios", "Edificios")
     object Mapa : Screen("mapa", "Mapa")
+    object Perfil : Screen("perfil", "Perfil")
+}
+
+// 1: ViewModel para almacenar el edificio seleccionado usando StateFlow
+class SeleccionViewModel : ViewModel() {
+    private val _edificioSeleccionado = MutableStateFlow("Ninguno")
+    val edificioSeleccionado: StateFlow<String> = _edificioSeleccionado.asStateFlow()
+
+    fun seleccionarEdificio(nombre: String) {
+        _edificioSeleccionado.value = nombre
+    }
 }
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Paso 9: Reemplazar contenido de setContent
         setContent {
             CampusNavigator_ComposeTheme {
                 MainScreen()
-            }A
+            }
         }
     }
 }
 
-// Paso 3, 4 y 5: Composable Raíz con Scaffold, NavigationBar y NavHost
+//  2: Instancia única de SeleccionViewModel en el Composable raíz
 @Composable
-fun MainScreen() {
+fun MainScreen(viewModel: SeleccionViewModel = viewModel()) {
     val navController = rememberNavController()
-    var edificioSeleccionado by remember { mutableStateOf("Ninguno") }
-    val items = listOf(Screen.Home, Screen.Edificios, Screen.Mapa)
+    //  5: Se incluye Screen.Perfil en la lista de ítems
+    val items = listOf(Screen.Home, Screen.Edificios, Screen.Mapa, Screen.Perfil)
 
     Scaffold(
         bottomBar = {
@@ -72,6 +86,7 @@ fun MainScreen() {
                         Screen.Home -> Icons.Default.Home
                         Screen.Edificios -> Icons.Default.List
                         Screen.Mapa -> Icons.Default.Place
+                        Screen.Perfil -> Icons.Default.Person
                     }
                     NavigationBarItem(
                         selected = currentRoute == screen.route,
@@ -88,26 +103,30 @@ fun MainScreen() {
             startDestination = Screen.Home.route,
             modifier = Modifier.padding(padding)
         ) {
+            //  2 y 4: HomeScreen recibe el ViewModel y lee el estado
             composable(Screen.Home.route) {
-                HomeScreen(edificioSeleccionado = edificioSeleccionado)
+                HomeScreen(viewModel = viewModel)
             }
+            //  2 y 3: EdificiosScreen recibe el ViewModel y actualiza directo
             composable(Screen.Edificios.route) {
-                EdificiosScreen(
-                    onEdificioSeleccionado = { nombre ->
-                        edificioSeleccionado = nombre
-                    }
-                )
+                EdificiosScreen(viewModel = viewModel)
             }
             composable(Screen.Mapa.route) {
                 MapaScreen()
+            }
+            //  5: Composable de la pestaña Perfil
+            composable(Screen.Perfil.route) {
+                PerfilScreen()
             }
         }
     }
 }
 
-// Paso 6: HomeScreen
+// 4: HomeScreen observa el StateFlow usando collectAsState()
 @Composable
-fun HomeScreen(edificioSeleccionado: String) {
+fun HomeScreen(viewModel: SeleccionViewModel) {
+    val edificioSeleccionado by viewModel.edificioSeleccionado.collectAsState()
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -119,9 +138,9 @@ fun HomeScreen(edificioSeleccionado: String) {
     }
 }
 
-// Paso 7: EdificiosScreen
+// 3: EdificiosScreen actualiza el valor directamente en el ViewModel
 @Composable
-fun EdificiosScreen(onEdificioSeleccionado: (String) -> Unit) {
+fun EdificiosScreen(viewModel: SeleccionViewModel) {
     val edificios = listOf("Biblioteca Central", "Pabellón A", "Pabellón B", "Auditorio")
 
     LazyColumn(
@@ -137,7 +156,7 @@ fun EdificiosScreen(onEdificioSeleccionado: (String) -> Unit) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(text = nombre, modifier = Modifier.weight(1f))
-                Button(onClick = { onEdificioSeleccionado(nombre) }) {
+                Button(onClick = { viewModel.seleccionarEdificio(nombre) }) {
                     Text("Ver")
                 }
             }
@@ -145,7 +164,6 @@ fun EdificiosScreen(onEdificioSeleccionado: (String) -> Unit) {
     }
 }
 
-// Paso 8: MapaScreen
 @Composable
 fun MapaScreen() {
     Box(
@@ -153,5 +171,16 @@ fun MapaScreen() {
         contentAlignment = Alignment.Center
     ) {
         Text(text = "Mapa de ubicaciones (pendiente de integrar)")
+    }
+}
+
+// 5: Pantalla Perfil con marcador de posición simple
+@Composable
+fun PerfilScreen() {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(text = "Perfil del Usuario (Marcador de posición)")
     }
 }
