@@ -51,4 +51,10 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
+    // Navigation para Jetpack Compose
+    implementation("androidx.navigation:navigation-compose:2.7.7")
+    // Integration de ViewModel con Compose
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
+    // Íconos extendidos de Material Design (para Home, List, Place, Person)
+    implementation("androidx.compose.material:material-icons-extended:1.6.8")
 }

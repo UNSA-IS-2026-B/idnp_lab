@@ -1,0 +1,30 @@
+[
+  {
+    "x": 100.0,
+    "y": 85.0,
+    "radio": 35.0,
+    "titulo": "Lab LIS",
+    "descripcion": "Laboratorio de Ingeniería de Software equipado con 30 estaciones de trabajo."
+  },
+  {
+    "x": 280.0,
+    "y": 85.0,
+    "radio": 35.0,
+    "titulo": "Lab LIDS",
+    "descripcion": "Laboratorio de Investigación y Desarrollo de Sistemas informáticos."
+  },
+  {
+    "x": 100.0,
+    "y": 235.0,
+    "radio": 35.0,
+    "titulo": "Aula 101",
+    "descripcion": "Aula teórica principal para clases magistrales de la EPIS."
+  },
+  {
+    "x": 280.0,
+    "y": 235.0,
+    "radio": 35.0,
+    "titulo": "Patio Central",
+    "descripcion": "Área de integración y descanso para los estudiantes del pabellón."
+  }
+]
