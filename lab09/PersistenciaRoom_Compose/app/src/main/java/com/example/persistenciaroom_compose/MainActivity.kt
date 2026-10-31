@@ -15,13 +15,13 @@ class MainActivity : ComponentActivity() {
 
         val database = crearBaseDeDatos(applicationContext)
         val dao = database.edificioDao()
-        val factory = EdificiosViewModelFactory(dao)
+        val factory = CampusViewModelFactory(dao)
 
         setContent {
             PersistenciaRoom_ComposeTheme {
-                val viewModel: EdificiosViewModel = viewModel(factory = factory)
+                val viewModel: CampusViewModel = viewModel(factory = factory)
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    ListaEdificiosConAmbientes(viewModel)
+                    PantallaCampus(viewModel)
                 }
             }
         }

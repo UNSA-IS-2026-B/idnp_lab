@@ -1,5 +1,5 @@
 package com.example.persistenciaroom_compose
-
+/*
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
@@ -40,3 +40,4 @@ class EdificiosViewModelFactory(private val dao: EdificioDao) : ViewModelProvide
         return EdificiosViewModel(dao) as T
     }
 }
+*/

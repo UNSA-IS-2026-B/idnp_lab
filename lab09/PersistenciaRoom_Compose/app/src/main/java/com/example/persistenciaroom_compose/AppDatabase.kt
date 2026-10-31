@@ -5,7 +5,10 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 
-@Database(entities = [EdificioEntity::class, AmbienteEntity::class], version = 1)
+@Database(
+    entities = [EdificioEntity::class, AmbienteEntity::class, NotaEntity::class],
+    version = 2
+)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun edificioDao(): EdificioDao
 }

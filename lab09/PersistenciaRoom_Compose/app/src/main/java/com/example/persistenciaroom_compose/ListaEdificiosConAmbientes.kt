@@ -1,5 +1,5 @@
 package com.example.persistenciaroom_compose
-
+/*
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -33,3 +33,4 @@ fun ListaEdificiosConAmbientes(viewModel: EdificiosViewModel) {
         }
     }
 }
+ */
