@@ -1,4 +1,3 @@
-
 package com.example.audioguiaforeground_compose
 
 import android.app.Notification
@@ -10,6 +9,8 @@ import android.content.Intent
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.example.audioguiaforeground_compose.data.AppDatabase
+import com.example.audioguiaforeground_compose.data.UltimaReproduccionEntity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -33,7 +34,12 @@ class AudioGuiaService : Service() {
         const val ACCION_CAMBIAR_EDIFICIO =
             "com.example.audioguiaforeground_compose.CAMBIAR_EDIFICIO"
 
+        const val ACCION_ESTADO =
+            "com.example.audioguiaforeground_compose.ESTADO"
+
         const val EXTRA_EDIFICIO = "nombre_edificio"
+        const val EXTRA_REPRODUCIENDO = "reproduciendo"
+        const val EXTRA_ACTIVO = "servicio_activo"
 
         private const val ID_CANAL = "canal_audioguia"
         private const val ID_NOTIFICACION = 1
@@ -45,6 +51,8 @@ class AudioGuiaService : Service() {
     )
 
     private var job: Job? = null
+    private var guardadoJob: Job? = null
+
     private var segundos = 0
     private var servicioActivo = false
     private var reproduciendo = false
@@ -72,7 +80,6 @@ class AudioGuiaService : Service() {
         Log.d(TAG, "Canal de notificaciones creado")
     }
 
-    // Crear una acción segura hacia este mismo servicio
     private fun crearPendingIntent(
         accion: String,
         requestCode: Int
@@ -94,7 +101,6 @@ class AudioGuiaService : Service() {
         )
     }
 
-    // Construir notificación con controles
     private fun construirNotificacion(): Notification {
 
         val estado = if (reproduciendo) {
@@ -106,7 +112,10 @@ class AudioGuiaService : Service() {
         val abrirAplicacion = PendingIntent.getActivity(
             this,
             10,
-            Intent(this, MainActivity::class.java),
+            Intent(this, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or
+                        Intent.FLAG_ACTIVITY_CLEAR_TOP
+            },
             PendingIntent.FLAG_UPDATE_CURRENT or
                     PendingIntent.FLAG_IMMUTABLE
         )
@@ -124,35 +133,23 @@ class AudioGuiaService : Service() {
             .setOnlyAlertOnce(true)
 
         if (reproduciendo) {
-
             builder.addAction(
                 android.R.drawable.ic_media_pause,
                 "Pausar",
-                crearPendingIntent(
-                    ACCION_PAUSAR,
-                    1
-                )
+                crearPendingIntent(ACCION_PAUSAR, 1)
             )
-
         } else {
-
             builder.addAction(
                 android.R.drawable.ic_media_play,
                 "Reanudar",
-                crearPendingIntent(
-                    ACCION_REPRODUCIR,
-                    2
-                )
+                crearPendingIntent(ACCION_REPRODUCIR, 2)
             )
         }
 
         builder.addAction(
             android.R.drawable.ic_menu_close_clear_cancel,
             "Detener",
-            crearPendingIntent(
-                ACCION_DETENER,
-                3
-            )
+            crearPendingIntent(ACCION_DETENER, 3)
         )
 
         return builder.build()
@@ -169,6 +166,66 @@ class AudioGuiaService : Service() {
         )
     }
 
+    // Comunicar el estado actual a Jetpack Compose
+    private fun informarEstado() {
+
+        val aviso = Intent(ACCION_ESTADO).apply {
+            setPackage(packageName)
+
+            putExtra(EXTRA_EDIFICIO, edificioActual)
+            putExtra(EXTRA_REPRODUCIENDO, reproduciendo)
+            putExtra(EXTRA_ACTIVO, servicioActivo)
+        }
+
+        sendBroadcast(aviso)
+
+        Log.d(
+            TAG,
+            "Estado enviado: activo=$servicioActivo, " +
+                    "reproduciendo=$reproduciendo"
+        )
+    }
+
+    // Guardar el último edificio reproducido
+    private fun guardarUltimoEdificio() {
+
+        val edificio = EdificiosCampus.lista.find {
+            it.nombre == edificioActual
+        } ?: return
+
+        guardadoJob?.cancel()
+
+        guardadoJob = serviceScope.launch {
+
+            try {
+                val database = AppDatabase.obtenerInstancia(
+                    applicationContext
+                )
+
+                database.reproduccionDao()
+                    .guardarUltimaReproduccion(
+                        UltimaReproduccionEntity(
+                            edificioId = edificio.id,
+                            nombreEdificio = edificio.nombre
+                        )
+                    )
+
+                Log.d(
+                    TAG,
+                    "Room: último edificio guardado: " +
+                            edificio.nombre
+                )
+
+            } catch (e: Exception) {
+                Log.e(
+                    TAG,
+                    "Error guardando reproducción",
+                    e
+                )
+            }
+        }
+    }
+
     override fun onStartCommand(
         intent: Intent?,
         flags: Int,
@@ -179,9 +236,18 @@ class AudioGuiaService : Service() {
 
             ACCION_REPRODUCIR -> {
 
-                edificioActual = intent.getStringExtra(
+                val solicitado = intent.getStringExtra(
                     EXTRA_EDIFICIO
-                ) ?: edificioActual
+                )
+
+                if (
+                    solicitado != null &&
+                    EdificiosCampus.lista.any {
+                        it.nombre == solicitado
+                    }
+                ) {
+                    edificioActual = solicitado
+                }
 
                 reproduciendo = true
 
@@ -191,7 +257,10 @@ class AudioGuiaService : Service() {
                 )
 
                 servicioActivo = true
+
                 iniciarAvance()
+                guardarUltimoEdificio()
+                informarEstado()
 
                 Log.d(
                     TAG,
@@ -207,12 +276,11 @@ class AudioGuiaService : Service() {
                     job = null
 
                     reproduciendo = false
-                    actualizarNotificacion()
 
-                    Log.d(
-                        TAG,
-                        "Reproducción pausada desde la app o notificación"
-                    )
+                    actualizarNotificacion()
+                    informarEstado()
+
+                    Log.d(TAG, "Reproducción pausada")
                 }
             }
 
@@ -220,12 +288,29 @@ class AudioGuiaService : Service() {
 
                 if (servicioActivo) {
 
-                    edificioActual = intent.getStringExtra(
+                    val solicitado = intent.getStringExtra(
                         EXTRA_EDIFICIO
-                    ) ?: edificioActual
+                    )
+
+                    if (
+                        solicitado != null &&
+                        EdificiosCampus.lista.any {
+                            it.nombre == solicitado
+                        }
+                    ) {
+                        edificioActual = solicitado
+                    }
 
                     segundos = 0
+
                     actualizarNotificacion()
+
+                    // Guardar si el nuevo edificio está reproduciéndose
+                    if (reproduciendo) {
+                        guardarUltimoEdificio()
+                    }
+
+                    informarEstado()
 
                     Log.d(
                         TAG,
@@ -243,15 +328,11 @@ class AudioGuiaService : Service() {
                 reproduciendo = false
                 servicioActivo = false
 
-                stopForeground(
-                    STOP_FOREGROUND_REMOVE
-                )
+                informarEstado()
 
-                Log.d(
-                    TAG,
-                    "Reproducción detenida desde la app o notificación"
-                )
+                stopForeground(STOP_FOREGROUND_REMOVE)
 
+                Log.d(TAG, "Reproducción detenida")
                 stopSelf()
             }
         }
@@ -272,7 +353,8 @@ class AudioGuiaService : Service() {
 
                 Log.d(
                     TAG,
-                    "Reproducción simulada de $edificioActual: $segundos s"
+                    "Reproducción simulada de " +
+                            "$edificioActual: $segundos s"
                 )
             }
         }
@@ -281,6 +363,7 @@ class AudioGuiaService : Service() {
     override fun onDestroy() {
 
         job?.cancel()
+        guardadoJob?.cancel()
         serviceScope.cancel()
 
         Log.d(TAG, "Servicio finalizado")
