@@ -4,6 +4,7 @@ package com.example.audioguiaforeground_compose
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Intent
 import android.os.IBinder
@@ -22,10 +23,13 @@ class AudioGuiaService : Service() {
     companion object {
         const val ACCION_REPRODUCIR =
             "com.example.audioguiaforeground_compose.REPRODUCIR"
+
         const val ACCION_PAUSAR =
             "com.example.audioguiaforeground_compose.PAUSAR"
+
         const val ACCION_DETENER =
             "com.example.audioguiaforeground_compose.DETENER"
+
         const val ACCION_CAMBIAR_EDIFICIO =
             "com.example.audioguiaforeground_compose.CAMBIAR_EDIFICIO"
 
@@ -68,20 +72,90 @@ class AudioGuiaService : Service() {
         Log.d(TAG, "Canal de notificaciones creado")
     }
 
+    // Crear una acción segura hacia este mismo servicio
+    private fun crearPendingIntent(
+        accion: String,
+        requestCode: Int
+    ): PendingIntent {
+
+        val intent = Intent(
+            this,
+            AudioGuiaService::class.java
+        ).apply {
+            action = accion
+        }
+
+        return PendingIntent.getService(
+            this,
+            requestCode,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or
+                    PendingIntent.FLAG_IMMUTABLE
+        )
+    }
+
+    // Construir notificación con controles
     private fun construirNotificacion(): Notification {
+
         val estado = if (reproduciendo) {
             "Reproduciendo audio-guía"
         } else {
             "Audio-guía pausada"
         }
 
-        return NotificationCompat.Builder(this, ID_CANAL)
+        val abrirAplicacion = PendingIntent.getActivity(
+            this,
+            10,
+            Intent(this, MainActivity::class.java),
+            PendingIntent.FLAG_UPDATE_CURRENT or
+                    PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val builder = NotificationCompat.Builder(
+            this,
+            ID_CANAL
+        )
             .setContentTitle(edificioActual)
             .setContentText(estado)
             .setSmallIcon(android.R.drawable.ic_media_play)
+            .setContentIntent(abrirAplicacion)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
-            .build()
+            .setOnlyAlertOnce(true)
+
+        if (reproduciendo) {
+
+            builder.addAction(
+                android.R.drawable.ic_media_pause,
+                "Pausar",
+                crearPendingIntent(
+                    ACCION_PAUSAR,
+                    1
+                )
+            )
+
+        } else {
+
+            builder.addAction(
+                android.R.drawable.ic_media_play,
+                "Reanudar",
+                crearPendingIntent(
+                    ACCION_REPRODUCIR,
+                    2
+                )
+            )
+        }
+
+        builder.addAction(
+            android.R.drawable.ic_menu_close_clear_cancel,
+            "Detener",
+            crearPendingIntent(
+                ACCION_DETENER,
+                3
+            )
+        )
+
+        return builder.build()
     }
 
     private fun actualizarNotificacion() {
@@ -104,13 +178,13 @@ class AudioGuiaService : Service() {
         when (intent?.action) {
 
             ACCION_REPRODUCIR -> {
+
                 edificioActual = intent.getStringExtra(
                     EXTRA_EDIFICIO
                 ) ?: edificioActual
 
                 reproduciendo = true
 
-                // La notificación debe acompañar al FGS.
                 startForeground(
                     ID_NOTIFICACION,
                     construirNotificacion()
@@ -126,18 +200,26 @@ class AudioGuiaService : Service() {
             }
 
             ACCION_PAUSAR -> {
+
                 if (servicioActivo) {
+
                     job?.cancel()
                     job = null
+
                     reproduciendo = false
                     actualizarNotificacion()
 
-                    Log.d(TAG, "Reproducción pausada")
+                    Log.d(
+                        TAG,
+                        "Reproducción pausada desde la app o notificación"
+                    )
                 }
             }
 
             ACCION_CAMBIAR_EDIFICIO -> {
+
                 if (servicioActivo) {
+
                     edificioActual = intent.getStringExtra(
                         EXTRA_EDIFICIO
                     ) ?: edificioActual
@@ -153,15 +235,23 @@ class AudioGuiaService : Service() {
             }
 
             ACCION_DETENER -> {
+
                 job?.cancel()
                 job = null
+
                 segundos = 0
                 reproduciendo = false
                 servicioActivo = false
 
-                stopForeground(STOP_FOREGROUND_REMOVE)
+                stopForeground(
+                    STOP_FOREGROUND_REMOVE
+                )
 
-                Log.d(TAG, "Reproducción detenida")
+                Log.d(
+                    TAG,
+                    "Reproducción detenida desde la app o notificación"
+                )
+
                 stopSelf()
             }
         }
@@ -170,10 +260,13 @@ class AudioGuiaService : Service() {
     }
 
     private fun iniciarAvance() {
+
         if (job?.isActive == true) return
 
         job = serviceScope.launch {
+
             while (true) {
+
                 delay(1000)
                 segundos++
 
@@ -186,10 +279,12 @@ class AudioGuiaService : Service() {
     }
 
     override fun onDestroy() {
+
         job?.cancel()
         serviceScope.cancel()
 
         Log.d(TAG, "Servicio finalizado")
+
         super.onDestroy()
     }
 }
