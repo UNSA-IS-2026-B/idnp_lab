@@ -26,6 +26,10 @@ class AudioGuiaService : Service() {
             "com.example.audioguiaforeground_compose.PAUSAR"
         const val ACCION_DETENER =
             "com.example.audioguiaforeground_compose.DETENER"
+        const val ACCION_CAMBIAR_EDIFICIO =
+            "com.example.audioguiaforeground_compose.CAMBIAR_EDIFICIO"
+
+        const val EXTRA_EDIFICIO = "nombre_edificio"
 
         private const val ID_CANAL = "canal_audioguia"
         private const val ID_NOTIFICACION = 1
@@ -38,7 +42,11 @@ class AudioGuiaService : Service() {
 
     private var job: Job? = null
     private var segundos = 0
-    private var enPrimerPlano = false
+    private var servicioActivo = false
+    private var reproduciendo = false
+
+    private var edificioActual =
+        EdificiosCampus.lista.first().nombre
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -50,29 +58,41 @@ class AudioGuiaService : Service() {
             "Audio-guía",
             NotificationManager.IMPORTANCE_LOW
         ).apply {
-            description = "Notificaciones del reproductor de audio-guía"
+            description = "Reproducción de audio-guías del campus"
         }
 
-        val manager = getSystemService(
+        getSystemService(
             NotificationManager::class.java
-        )
-
-        manager.createNotificationChannel(canal)
+        ).createNotificationChannel(canal)
 
         Log.d(TAG, "Canal de notificaciones creado")
     }
 
-    private fun construirNotificacion(
-        titulo: String,
-        estado: String
-    ): Notification {
+    private fun construirNotificacion(): Notification {
+        val estado = if (reproduciendo) {
+            "Reproduciendo audio-guía"
+        } else {
+            "Audio-guía pausada"
+        }
+
         return NotificationCompat.Builder(this, ID_CANAL)
-            .setContentTitle(titulo)
+            .setContentTitle(edificioActual)
             .setContentText(estado)
             .setSmallIcon(android.R.drawable.ic_media_play)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
             .build()
+    }
+
+    private fun actualizarNotificacion() {
+        if (!servicioActivo) return
+
+        getSystemService(
+            NotificationManager::class.java
+        ).notify(
+            ID_NOTIFICACION,
+            construirNotificacion()
+        )
     }
 
     override fun onStartCommand(
@@ -84,48 +104,64 @@ class AudioGuiaService : Service() {
         when (intent?.action) {
 
             ACCION_REPRODUCIR -> {
-                Log.d(TAG, "Reproducción iniciada o reanudada")
+                edificioActual = intent.getStringExtra(
+                    EXTRA_EDIFICIO
+                ) ?: edificioActual
 
-                val notificacion = construirNotificacion(
-                    "Biblioteca Central",
-                    "Reproduciendo audio-guía"
-                )
+                reproduciendo = true
 
+                // La notificación debe acompañar al FGS.
                 startForeground(
                     ID_NOTIFICACION,
-                    notificacion
+                    construirNotificacion()
                 )
 
-                enPrimerPlano = true
+                servicioActivo = true
                 iniciarAvance()
+
+                Log.d(
+                    TAG,
+                    "Reproduciendo: $edificioActual"
+                )
             }
 
             ACCION_PAUSAR -> {
-                Log.d(TAG, "Reproducción pausada")
-                job?.cancel()
-                job = null
+                if (servicioActivo) {
+                    job?.cancel()
+                    job = null
+                    reproduciendo = false
+                    actualizarNotificacion()
 
-                if (enPrimerPlano) {
-                    val notificacion = construirNotificacion(
-                        "Biblioteca Central",
-                        "Audio-guía pausada"
+                    Log.d(TAG, "Reproducción pausada")
+                }
+            }
+
+            ACCION_CAMBIAR_EDIFICIO -> {
+                if (servicioActivo) {
+                    edificioActual = intent.getStringExtra(
+                        EXTRA_EDIFICIO
+                    ) ?: edificioActual
+
+                    segundos = 0
+                    actualizarNotificacion()
+
+                    Log.d(
+                        TAG,
+                        "Edificio cambiado: $edificioActual"
                     )
-
-                    getSystemService(
-                        NotificationManager::class.java
-                    ).notify(ID_NOTIFICACION, notificacion)
                 }
             }
 
             ACCION_DETENER -> {
-                Log.d(TAG, "Reproducción detenida")
-
                 job?.cancel()
                 job = null
                 segundos = 0
+                reproduciendo = false
+                servicioActivo = false
 
                 stopForeground(STOP_FOREGROUND_REMOVE)
-                enPrimerPlano = false
+
+                Log.d(TAG, "Reproducción detenida")
                 stopSelf()
             }
         }
@@ -143,7 +179,7 @@ class AudioGuiaService : Service() {
 
                 Log.d(
                     TAG,
-                    "Reproducción simulada: $segundos segundos"
+                    "Reproducción simulada de $edificioActual: $segundos s"
                 )
             }
         }

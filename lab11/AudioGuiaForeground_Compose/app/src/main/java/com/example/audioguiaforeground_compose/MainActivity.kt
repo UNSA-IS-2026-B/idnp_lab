@@ -32,9 +32,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             AudioGuiaForeground_ComposeTheme {
-                Surface(
-                    modifier = Modifier.fillMaxSize()
-                ) {
+                Surface(Modifier.fillMaxSize()) {
                     PantallaAudioGuia()
                 }
             }
@@ -47,6 +45,10 @@ fun PantallaAudioGuia() {
 
     val context = LocalContext.current
 
+    var indiceActual by remember {
+        mutableIntStateOf(0)
+    }
+
     var estado by remember {
         mutableStateOf("Audio-guía detenida")
     }
@@ -55,16 +57,21 @@ fun PantallaAudioGuia() {
         mutableStateOf(false)
     }
 
+    var servicioIniciado by remember {
+        mutableStateOf(false)
+    }
+
     var enSegundoPlano by remember {
         mutableStateOf(false)
     }
+
+    val edificioActual = EdificiosCampus.lista[indiceActual]
 
     // Permiso de notificaciones
     val permisoNotificaciones =
         rememberLauncherForActivityResult(
             ActivityResultContracts.RequestPermission()
         ) { concedido ->
-
             Log.d(
                 "AUDIO_GUIA",
                 "Permiso de notificaciones: $concedido"
@@ -85,16 +92,14 @@ fun PantallaAudioGuia() {
         }
     }
 
-    // Detectar primer y segundo plano
+    // Detectar cambios de visibilidad de la aplicación
     DisposableEffect(Unit) {
+        val lifecycle = ProcessLifecycleOwner.get().lifecycle
 
         val observer = LifecycleEventObserver { _, event ->
-
             when (event) {
-
                 Lifecycle.Event.ON_START -> {
                     enSegundoPlano = false
-
                     Log.d(
                         "AUDIO_GUIA",
                         "Aplicación en primer plano"
@@ -103,7 +108,6 @@ fun PantallaAudioGuia() {
 
                 Lifecycle.Event.ON_STOP -> {
                     enSegundoPlano = true
-
                     Log.d(
                         "AUDIO_GUIA",
                         "Aplicación en segundo plano"
@@ -114,8 +118,6 @@ fun PantallaAudioGuia() {
             }
         }
 
-        val lifecycle = ProcessLifecycleOwner.get().lifecycle
-
         lifecycle.addObserver(observer)
 
         onDispose {
@@ -123,30 +125,34 @@ fun PantallaAudioGuia() {
         }
     }
 
-    // Enviar acciones al Foreground Service
-    fun enviarAccion(accion: String) {
-
+    // Comunicación con AudioGuiaService
+    fun enviarAccion(
+        accion: String,
+        nombreEdificio: String = edificioActual.nombre
+    ) {
         val intent = Intent(
             context,
             AudioGuiaService::class.java
         ).apply {
             action = accion
+            putExtra(
+                AudioGuiaService.EXTRA_EDIFICIO,
+                nombreEdificio
+            )
         }
 
         if (accion == AudioGuiaService.ACCION_REPRODUCIR) {
-
             ContextCompat.startForegroundService(
                 context,
                 intent
             )
-
         } else {
-
-            context.startService(intent)
+            if (servicioIniciado) {
+                context.startService(intent)
+            }
         }
     }
 
-    // Interfaz Jetpack Compose
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -162,14 +168,22 @@ fun PantallaAudioGuia() {
             textAlign = TextAlign.Center
         )
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(Modifier.height(12.dp))
 
         Text(
-            text = "Biblioteca Central",
-            style = MaterialTheme.typography.titleMedium
+            text = "Edificio ${indiceActual + 1} de ${EdificiosCampus.lista.size}",
+            style = MaterialTheme.typography.labelLarge
         )
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(Modifier.height(8.dp))
+
+        Text(
+            text = edificioActual.nombre,
+            style = MaterialTheme.typography.titleLarge,
+            textAlign = TextAlign.Center
+        )
+
+        Spacer(Modifier.height(20.dp))
 
         Text(
             text = estado,
@@ -177,17 +191,13 @@ fun PantallaAudioGuia() {
             textAlign = TextAlign.Center
         )
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(Modifier.height(24.dp))
 
-        // Reproducir o reanudar
         Button(
             onClick = {
-
-                enviarAccion(
-                    AudioGuiaService.ACCION_REPRODUCIR
-                )
-
+                enviarAccion(AudioGuiaService.ACCION_REPRODUCIR)
                 reproduciendo = true
+                servicioIniciado = true
                 estado = "Reproduciendo audio-guía..."
             },
             enabled = !reproduciendo
@@ -195,16 +205,11 @@ fun PantallaAudioGuia() {
             Text("Reproducir / Reanudar")
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(Modifier.height(10.dp))
 
-        // Pausar reproducción
         OutlinedButton(
             onClick = {
-
-                enviarAccion(
-                    AudioGuiaService.ACCION_PAUSAR
-                )
-
+                enviarAccion(AudioGuiaService.ACCION_PAUSAR)
                 reproduciendo = false
                 estado = "Audio-guía pausada"
             },
@@ -213,21 +218,43 @@ fun PantallaAudioGuia() {
             Text("Pausar")
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(Modifier.height(10.dp))
 
-        // Detener reproducción
         OutlinedButton(
             onClick = {
-
-                enviarAccion(
-                    AudioGuiaService.ACCION_DETENER
-                )
-
+                enviarAccion(AudioGuiaService.ACCION_DETENER)
                 reproduciendo = false
+                servicioIniciado = false
                 estado = "Audio-guía detenida"
             }
         ) {
             Text("Detener")
+        }
+
+        Spacer(Modifier.height(24.dp))
+
+        Button(
+            onClick = {
+                indiceActual = (
+                        indiceActual + 1
+                        ) % EdificiosCampus.lista.size
+
+                val siguiente = EdificiosCampus.lista[indiceActual]
+
+                if (servicioIniciado) {
+                    enviarAccion(
+                        AudioGuiaService.ACCION_CAMBIAR_EDIFICIO,
+                        siguiente.nombre
+                    )
+                }
+
+                Log.d(
+                    "AUDIO_GUIA",
+                    "Siguiente edificio: ${siguiente.nombre}"
+                )
+            }
+        ) {
+            Text("Siguiente edificio")
         }
     }
 }
