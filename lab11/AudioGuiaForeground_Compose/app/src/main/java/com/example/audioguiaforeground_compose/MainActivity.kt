@@ -224,7 +224,9 @@ fun PantallaAudioGuia() {
                 servicioIniciado = activo
                 reproduciendo = enReproduccion
 
-                estado = when {
+                estado = intent.getStringExtra(
+                    AudioGuiaService.EXTRA_MENSAJE
+                ) ?: when {
                     !activo -> "Audio-guía detenida"
                     enReproduccion -> "Reproduciendo audio-guía..."
                     else -> "Audio-guía pausada"
